@@ -20,6 +20,9 @@ def test_kafka_event_repeatable_null():
     assert kafka_event(row)==(k,v)
 
 def test_warehouse_read_and_hive_export(tmp_path):
+    import pytest
+    pytest.importorskip('duckdb')
+    pytest.importorskip('pyarrow')
     import duckdb
     db=_demo(tmp_path)
     assert len(warehouse_rows(db))==8
