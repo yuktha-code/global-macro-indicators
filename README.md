@@ -138,3 +138,15 @@ global-macro-indicators/
 6. World Bank country codes and classifications can evolve. Configured codes and reference metadata should be reviewed periodically.
 
 **Not affiliated with the World Bank.**
+
+## Optional streaming, partitioning and cloud-storage exercises (October 2026)
+
+The [integration lab source](econpipe/integration_lab.py) and [automated checks](.github/workflows/integration-lab.yml) extend the public-indicators warehouse:
+
+- **Apache Kafka:** Python `confluent-kafka` producer sends deterministic, keyed JSON observation events with delivery acknowledgements. [Broker integration CI](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38086500899) verified **8 messages produced and consumed** against an actual Apache Kafka broker.
+- **Hive-compatible Parquet:** PyArrow exports `year=YYYY` directories containing Parquet files. DuckDB checks confirmed **8 records in 2 year partitions** and an unchanged repeat export. [Hive external-table DDL](sql/hive_external_table.sql) is provided, but **Apache Hive itself has not been deployed or run**.
+- **Azure Blob SDK:** The Python SDK uploaded and listed **2 Parquet blobs using Azurite**, the local Azure Storage emulator, in the same [passing CI run](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38086500899). **No actual Azure cloud deployment is claimed.**
+
+The core pipeline remains independent of these optional dependencies; [core CI](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38086500875) passed **18 tests with one optional Parquet test skipped** in the core-only environment.
+
+These are educational integrations and engineering tests, not a production cluster or end-to-end exactly-once Kafka/Azure/Hive system.
