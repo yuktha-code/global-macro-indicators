@@ -1,0 +1,25 @@
+{
+  "_notice": "ARTIFICIAL ILLUSTRATIVE VALUES. Matches World Bank JSON field shape, NOT a World Bank extract.",
+  "countries": [
+    {"id":"IND","iso2Code":"IN","name":"India","region":{"id":"SAS","value":"South Asia"},"incomeLevel":{"value":"Lower middle income"}},
+    {"id":"BRA","iso2Code":"BR","name":"Brazil","region":{"id":"LCN","value":"Latin America & Caribbean"},"incomeLevel":{"value":"Upper middle income"}}
+  ],
+  "indicators": {
+    "NY.GDP.MKTP.CD": [{"id":"NY.GDP.MKTP.CD","name":"GDP (current US$)","unit":"","source":{"id":"2","value":"World Development Indicators"}}],
+    "FP.CPI.TOTL.ZG": [{"id":"FP.CPI.TOTL.ZG","name":"Inflation, consumer prices (annual %)","unit":"%","source":{"id":"2","value":"World Development Indicators"}}]
+  },
+  "observations": {
+    "NY.GDP.MKTP.CD": [
+      {"countryiso3code":"IND","country":{"value":"India"},"indicator":{"id":"NY.GDP.MKTP.CD"},"date":"2021","value":123.0,"obs_status":""},
+      {"countryiso3code":"IND","country":{"value":"India"},"indicator":{"id":"NY.GDP.MKTP.CD"},"date":"2022","value":125.0,"obs_status":""},
+      {"countryiso3code":"BRA","country":{"value":"Brazil"},"indicator":{"id":"NY.GDP.MKTP.CD"},"date":"2021","value":210.0,"obs_status":""},
+      {"countryiso3code":"BRA","country":{"value":"Brazil"},"indicator":{"id":"NY.GDP.MKTP.CD"},"date":"2022","value":null,"obs_status":""}
+    ],
+    "FP.CPI.TOTL.ZG": [
+      {"countryiso3code":"IND","country":{"value":"India"},"indicator":{"id":"FP.CPI.TOTL.ZG"},"date":"2021","value":1.0,"obs_status":""},
+      {"countryiso3code":"IND","country":{"value":"India"},"indicator":{"id":"FP.CPI.TOTL.ZG"},"date":"2022","value":2.0,"obs_status":""},
+      {"countryiso3code":"BRA","country":{"value":"Brazil"},"indicator":{"id":"FP.CPI.TOTL.ZG"},"date":"2021","value":3.0,"obs_status":""},
+      {"countryiso3code":"BRA","country":{"value":"Brazil"},"indicator":{"id":"FP.CPI.TOTL.ZG"},"date":"2022","value":4.0,"obs_status":""}
+    ]
+  }
+}
