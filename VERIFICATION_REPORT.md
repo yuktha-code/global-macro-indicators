@@ -1,32 +1,29 @@
 # Verification report — 10 October 2026
 
-## Completed in the current execution environment
+## What has been executed
 
-- Python: 3.13.5, with `requests`, `SQLAlchemy` and `pytest` already available in environment.
-- Static syntax: `python -m compileall -q econpipe dags tests` — passed.
-- Unit/integration tests: `python -m pytest -q` — **16 passed**.
-- Offline end-to-end demonstration with fixture values that are **artificial, not World Bank figures**:
-  - First run: 8 source observations, 8 new warehouse fact rows, 1 missing value, 0 orphans.
-  - Second run: 8 source observations, 0 new rows, 0 revisions, 8 unchanged; facts remained at 8 rows.
-- SQL marts: `v_latest_available` and `v_country_indicator_long` queried successfully against the offline SQLite demo.
-- Transaction rollback, rejected source duplication, malformed response, pagination and values outside bounds have test coverage.
+**Offline tests:** 16 passed locally using Python 3.13 and on GitHub Actions using Python 3.11. Covers World Bank-style response pagination, validation failures, duplicate detection, missing values, transactional rollback, SQL warehouse loads, and idempotent replays.
 
-## Not completed / cannot be claimed
+- Offline workflow: https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058036401
+- Subsequent offline run: https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058101459
 
-- No successful live World Bank API request: this execution environment could not resolve `api.worldbank.org` over the network.
-- No genuine public indicator records have been downloaded or counted here.
-- No PostgreSQL service or Docker Engine is available to run the configured database profile.
-- No Airflow engine is installed, so the optional DAG has been syntax-checked but not executed.
-- No GitHub Actions run for this new project, as there is not yet a public repository. Local tests are not remote CI.
-- No benchmark for multi-million-row ingestion or cloud service operation.
+**Artificial fixture results:** 8 accepted example observations, including one SQL NULL, loaded as 8 fact records; identical replay inserted 0 and updated 0. This is test data, not a real World Bank extract.
 
-## Evidence to capture on a network-enabled machine
+**Real World Bank API results:** A separate GitHub Actions workflow successfully requested data from the official World Bank Indicators API v2 for India, Brazil and USA, covering GDP in current USD and annual CPI inflation for 2021–2023. It obtained **18 real API observation records**, inserted **18 fact rows**, and verified an identical second load with **0 inserts**, **0 updates**, and **0 foreign-key orphan rows**.
 
-1. `python -m pytest -q` (pass required).
-2. `python -m econpipe.cli run --db-url sqlite:///data/economic_warehouse.sqlite` (save the JSON report).
-3. Rerun same command; verify 0 inserted and 0 updated unless World Bank revised data in between.
-4. `python -m econpipe.cli report --db-url sqlite:///data/economic_warehouse.sqlite` (inspect real metadata and values).
-5. Optionally test PostgreSQL with Docker and an explicit `DATABASE_URL`, then record actual results.
-6. Publish to a GitHub repository and check the CI workflow completes successfully.
+- Live ingestion run: https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058101437
+- Machine-readable reports are available as an artifact on that workflow run. These are bounded live smoke-test results, not a claim of production deployment.
 
-Until live data and GitHub publish succeed, a resume can truthfully cite **the API client, SQL schema, and 16 offline tests** but must not state that World Bank indicators were successfully downloaded or that PostgreSQL/Airflow were deployed.
+## Not yet verified
+
+- Running this setup with PostgreSQL under Docker. The provided Compose file and SQLAlchemy PostgreSQL dialect integration are configuration, not verified deployment.
+- Triggering the monthly Apache Airflow DAG using a configured scheduler.
+- Large-scale cloud/distributed data workloads, Spark, Kafka or Hadoop.
+
+## Data lineage
+
+Official World Bank API v2, World Development Indicators. Endpoints and indicator codes are documented in [DATA_SOURCES.md](DATA_SOURCES.md). Annual values may be missing for some country/indicator/year combinations; NULL is preserved as NULL, not silently replaced by zero.
+
+## Reproduce
+
+Run `python -m pytest -q`, `python -m econpipe.cli demo`, and `python -m econpipe.cli run` in a Python 3.11+ environment. For a live run, use a reliable internet connection. See [README.md](README.md) and [WINDOWS_RUNBOOK.ps1](WINDOWS_RUNBOOK.ps1).
