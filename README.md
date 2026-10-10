@@ -1,10 +1,12 @@
 # Global Macroeconomic Indicators
 
+[![Offline Python and SQL checks](https://github.com/yuktha-code/global-macro-indicators/actions/workflows/ci.yml/badge.svg)](https://github.com/yuktha-code/global-macro-indicators/actions/workflows/ci.yml) [![Live World Bank ingestion](https://github.com/yuktha-code/global-macro-indicators/actions/workflows/live-api.yml/badge.svg)](https://github.com/yuktha-code/global-macro-indicators/actions/workflows/live-api.yml)
+
 **Python · World Bank Indicators API v2 · SQLAlchemy · SQLite/PostgreSQL · ETL · SQL marts · pytest · GitHub Actions**
 
 A public-data research and analytics project designed to ingest macroeconomic indicators from the World Bank's official API, validate them, and maintain a queryable relational warehouse with source-level audit history. The project is sector-neutral: economic statistics, public-data pipelines and relational analytics are applicable to research, fintech, consulting and general data engineering.
 
-**Execution status (10 Oct 2026):** 16 offline automated tests passed; a demonstration load and idempotent rerun completed successfully with an **artificial API-shaped fixture**. **The live World Bank download, PostgreSQL Docker execution and Airflow scheduling have not yet been executed and verified** in this environment because the live API is not network reachable here and Docker is unavailable. Those components and live row counts remain unverified until actually executed.
+**Verified status (10 Oct 2026):** The 16 offline tests and fixture replay passed in GitHub Actions. A separate GitHub Actions [live API verification](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058101437) successfully downloaded 18 real World Bank indicator records for IND, BRA and USA (GDP and inflation, 2021–2023); 18 facts were inserted and an immediate rerun inserted 0 and updated 0, with 0 foreign-key orphans. Optional PostgreSQL/Docker and Airflow remain configured but not independently run.
 
 ## Why this project
 
@@ -128,7 +130,7 @@ global-macro-indicators/
 
 ## Limitations and next engineering steps
 
-1. **Live API, Docker/PostgreSQL and Airflow need independent verification** before describing the components as verified. CI runs offline so its success does not establish those deployments.
+1. **Live API ingestion is verified in a bounded GitHub Actions smoke run**, but Docker/PostgreSQL and Airflow still need independent verification before being described as deployed. The standard CI runs offline; a separate workflow tests live ingestion.
 2. This bounded portfolio dataset does not demonstrate Spark, Kafka, Hadoop, cloud deployment or petabyte-scale workloads.
 3. Data is annual, and latest record dates differ by indicator. GDP in current USD is not real GDP; no currency or inflation adjustment is performed.
 4. The client retries transient HTTP errors and rejects incomplete pagination. A production pipeline would add raw payload archiving, source checksums, alerts, watermark strategy and concurrency-aware orchestration.
