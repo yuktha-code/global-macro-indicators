@@ -26,7 +26,7 @@ jobs:
       - run: npm install -g azurite@3.35.0
       - run: |
           mkdir -p /tmp/azurite
-          azurite --silent --location /tmp/azurite > /tmp/azurite.log 2>&1 &
+          azurite --silent --skipApiVersionCheck --location /tmp/azurite > /tmp/azurite.log 2>&1 &
           sleep 4
           python -m econpipe.cli demo --db-url sqlite:///data/azure_macro.sqlite
           python - <<'PY'
