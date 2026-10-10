@@ -1,0 +1,90 @@
+name: Optional Kafka Hive Parquet Azure SDK lab
+on:
+  push:
+    paths:
+      - 'econpipe/integration_lab.py'
+      - 'tests/test_integration_lab.py'
+      - 'sql/hive_external_table.sql'
+      - '.github/workflows/integration-lab.yml'
+  workflow_dispatch:
+jobs:
+  parquet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install -e '.[dev]' pyarrow duckdb
+      - run: python -m pytest -q
+  azure-emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install -e . pyarrow azure-storage-blob
+      - run: npm install -g azurite@3.35.0
+      - run: |
+          mkdir -p /tmp/azurite
+          azurite --silent --location /tmp/azurite > /tmp/azurite.log 2>&1 &
+          sleep 4
+          python -m econpipe.cli demo --db-url sqlite:///data/azure_macro.sqlite
+          python - <<'PY'
+          import json
+          from econpipe.integration_lab import export_hive_partitions, azure_upload_parquet
+          from azure.storage.blob import BlobServiceClient
+          db='sqlite:///data/azure_macro.sqlite'
+          r=export_hive_partitions(db,'data/azure_export')
+          conn='UseDevelopmentStorage=true'
+          info=azure_upload_parquet('data/azure_export',conn)
+          c=BlobServiceClient.from_connection_string(conn).get_container_client('macro-indicators')
+          blobs=list(c.list_blobs(name_starts_with='world-bank-wdi/'))
+          assert info['uploaded']==r['partition_count']==len(blobs)
+          print('AZURITE API VERIFIED:',len(blobs),'Parquet blobs')
+          PY
+  kafka-broker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install -e . confluent-kafka
+      - name: Launch Apache Kafka in KRaft mode
+        run: |
+          docker run -d --rm --name kafka -p 9092:9092 apache/kafka:3.9.1
+          python - <<'PY'
+          import time
+          from confluent_kafka.admin import AdminClient
+          for attempt in range(45):
+              try:
+                  c=AdminClient({'bootstrap.servers':'localhost:9092'})
+                  c.list_topics(timeout=3)
+                  print('Kafka broker ready')
+                  break
+              except Exception:
+                  time.sleep(2)
+          else: raise RuntimeError('Kafka broker failed readiness')
+          PY
+      - name: Verify broker delivery and consumer read
+        run: |
+          python -m econpipe.cli demo --db-url sqlite:///data/kafka_macro.sqlite
+          python - <<'PY'
+          import json, time, uuid
+          from econpipe.integration_lab import publish_kafka
+          from confluent_kafka import Consumer
+          report=publish_kafka('sqlite:///data/kafka_macro.sqlite')
+          assert report['acknowledged']==8
+          c=Consumer({'bootstrap.servers':'localhost:9092',
+                      'group.id':'macro-check-'+str(uuid.uuid4()),
+                      'auto.offset.reset':'earliest'})
+          c.subscribe(['macro-observations'])
+          got=[]
+          until=time.monotonic()+30
+          while time.monotonic()<until and len(got)<8:
+              item=c.poll(1)
+              if item is not None and not item.error():
+                  got.append(json.loads(item.value()))
+          c.close()
+          assert len(got)==8, f'expected 8 consumed, got {len(got)}'
+          print('KAFKA BROKER VERIFIED:',len(got),'consumed')
+          PY
