@@ -1,0 +1,31 @@
+name: Verify live World Bank ingestion
+on:
+  push:
+    paths:
+      - 'econpipe/**'
+      - 'pyproject.toml'
+      - '.github/workflows/live-api.yml'
+  workflow_dispatch:
+jobs:
+  live-api-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Run real API ingestion and repeat the load
+        run: |
+          python -m econpipe.cli run --countries IND,BRA,USA --indicators NY.GDP.MKTP.CD,FP.CPI.TOTL.ZG --first-year 2021 --last-year 2023 --db-url sqlite:///data/live_world_bank.sqlite --output results/live_run_1.json
+          python -m econpipe.cli run --countries IND,BRA,USA --indicators NY.GDP.MKTP.CD,FP.CPI.TOTL.ZG --first-year 2021 --last-year 2023 --db-url sqlite:///data/live_world_bank.sqlite --output results/live_run_2.json
+          python -c "import json; a=json.load(open('results/live_run_1.json')); b=json.load(open('results/live_run_2.json')); assert a['data_kind']=='live API' and a['source_rows']>0 and a['fk_orphan_rows']==0; assert b['inserted']==0 and b['updated']==0 and b['fk_orphan_rows']==0; print('LIVE VERIFIED:',a['source_rows'],'source rows,',a['warehouse_fact_rows'],'facts, repeat unchanged')"
+      - name: Preserve verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-bank-ingestion-reports
+          path: results/live_run_*.json
+          if-no-files-found: ignore
