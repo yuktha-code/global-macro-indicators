@@ -6,7 +6,7 @@
 
 A public-data research and analytics project designed to ingest macroeconomic indicators from the World Bank's official API, validate them, and maintain a queryable relational warehouse with source-level audit history. The project is sector-neutral: economic statistics, public-data pipelines and relational analytics are applicable to research, fintech, consulting and general data engineering.
 
-**Verified status (10 Oct 2026):** The 16 offline tests and fixture replay passed in GitHub Actions. A separate GitHub Actions [live API verification](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058101437) successfully downloaded 18 real World Bank indicator records for IND, BRA and USA (GDP and inflation, 2021–2023); 18 facts were inserted and an immediate rerun inserted 0 and updated 0, with 0 foreign-key orphans. Optional PostgreSQL/Docker and Airflow remain configured but not independently run.
+**Verified status (10 Oct 2026):** The 16 offline tests and fixture replay passed in GitHub Actions. A separate GitHub Actions [live API verification](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38058101437) successfully downloaded 18 real World Bank indicator records for IND, BRA and USA (GDP and inflation, 2021–2023); 18 facts were inserted and an immediate rerun inserted 0 and updated 0, with 0 foreign-key orphans. PostgreSQL integration and an Airflow DAG execution are now independently verified in GitHub Actions using **artificial fixture data**; they are not production deployments.
 
 ## Why this project
 
@@ -78,7 +78,7 @@ $env:DATABASE_URL = 'postgresql+psycopg2://econ_dev:local_dev_only_change_me@loc
 .\.venv\Scripts\python.exe -m econpipe.cli report
 ```
 
-Change local development credentials before using outside a private development machine. Do not claim this Postgres option was deployed until you run it successfully. `dags/economic_indicators_etl.py` is an **optional Airflow DAG definition** with monthly scheduling and retries; you must install/configure Airflow and mount the project before triggering it. No Airflow run is included here.
+Change local development credentials before using outside a private development machine. A PostgreSQL 16 service was independently exercised in GitHub Actions on 12 Oct 2026. This local Compose example remains optional and has not been separately verified on a personal computer. `dags/economic_indicators_etl.py` defines two dependent tasks and monthly scheduling. [The GitHub Actions DAG test](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38178920480) executed both tasks successfully against the **artificial eight-row demo fixture** under Airflow 2.10.5. Real-world scheduling, monitoring and live-data production runs are not verified; use `ECON_PIPELINE_MODE=run` for a separately configured live environment.
 
 ## Warehouse model
 
@@ -98,7 +98,7 @@ The warehouse uses composite keys, reference integrity and an all-or-nothing loa
 
 Executed in an offline environment with `python -m pytest -q`:
 
-* 16 tests passed, covering two-page API retrieval, incomplete/malformed/failed API responses, duplicate observations, missing values, out-of-scope records, chronological year bounds, source revisions, database rollback, full ETL load and repeat-load idempotence.
+* 18 tests passed in [core CI](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38178920468), with the optional Parquet/DuckDB test skipped in the core-only environment, covering two-page API retrieval, incomplete/malformed/failed API responses, duplicate observations, missing values, out-of-scope records, chronological year bounds, source revisions, database rollback, full ETL load and repeat-load idempotence.
 * Artificial fixture demo: 8 source rows, 1 null value, 8 inserted facts; second run: 0 inserted, 0 updated and 8 unchanged.
 * Foreign-key orphan count after load: 0. These counts are **illustrative test results**, not World Bank observations.
 
@@ -118,8 +118,8 @@ global-macro-indicators/
     test_transform.py
     test_pipeline.py
   sql/analysis.sql
-  dags/economic_indicators_etl.py    # optional; not deployed
-  docker-compose.yml                # optional PostgreSQL; not verified here
+  dags/economic_indicators_etl.py    # two-task CI-executed DAG; no production deployment
+  docker-compose.yml                # optional local PostgreSQL Compose; hosted Postgres separately tested
   pyproject.toml
   requirements.txt
   README.md
@@ -130,8 +130,8 @@ global-macro-indicators/
 
 ## Limitations and next engineering steps
 
-1. **Live API ingestion is verified in a bounded GitHub Actions smoke run**, but Docker/PostgreSQL and Airflow still need independent verification before being described as deployed. The standard CI runs offline; a separate workflow tests live ingestion.
-2. This bounded portfolio dataset does not demonstrate Spark, Kafka, Hadoop, cloud deployment or petabyte-scale workloads.
+1. **Live API ingestion, PostgreSQL integration and a two-task Airflow DAG smoke test are verified separately in GitHub Actions.** The PostgreSQL and Airflow checks use artificial fixtures, not a production source/scheduler. A personal-machine Docker Compose run and an unattended recurring Airflow deployment have not been verified.
+2. This bounded dataset does not demonstrate Spark, Hadoop, cloud deployment or petabyte-scale workloads. A separate **eight-event Kafka broker integration test** is verified, not a production streaming system.
 3. Data is annual, and latest record dates differ by indicator. GDP in current USD is not real GDP; no currency or inflation adjustment is performed.
 4. The client retries transient HTTP errors and rejects incomplete pagination. A production pipeline would add raw payload archiving, source checksums, alerts, watermark strategy and concurrency-aware orchestration.
 5. The `fact_country_indicator_year` table stores the latest ingested observation. It does not preserve every revision; per-run staging tables retain loaded snapshots but not arbitrary upstream request metadata or failed fetches.
@@ -150,3 +150,14 @@ The [integration lab source](econpipe/integration_lab.py) and [automated checks]
 The core pipeline remains independent of these optional dependencies; [core CI](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38086500875) passed **18 tests with one optional Parquet test skipped** in the core-only environment.
 
 These are educational integrations and engineering tests, not a production cluster or end-to-end exactly-once Kafka/Azure/Hive system.
+
+
+## Hosted PostgreSQL and Apache Airflow verification (12 Oct 2026)
+
+A separately automated [GitHub Actions workflow](.github/workflows/postgres-airflow-verification.yml) produced these independently checked outcomes in [successful run 38178920480](https://github.com/yuktha-code/global-macro-indicators/actions/runs/38178920480):
+
+- **PostgreSQL 16:** Eight **artificial fixture** facts inserted; zero foreign-key orphans; identical replay left eight facts unchanged with two run-audit records and zero duplicate fact rows.
+- **Airflow 2.10.5:** `airflow dags test economic_indicators_etl 2026-10-01` executed both `fetch_validate_upsert` and `verify_sql_reporting` tasks to **SUCCESS**, and an assertion confirmed eight rows in the fixture SQL warehouse.
+- **Runtime compatibility:** Airflow and the SQLAlchemy 2 ETL executable used isolated Python environments to prevent incompatible dependency resolution.
+
+These checks verify real service behavior in ephemeral CI environments, **not a production system, cloud-hosted warehouse, or automatic live monthly execution**.
