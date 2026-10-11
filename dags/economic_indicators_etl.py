@@ -15,8 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODE = os.getenv("ECON_PIPELINE_MODE", "run")
 if MODE not in {"run", "demo"}:
     raise ValueError("ECON_PIPELINE_MODE must be run or demo")
-RUN = f"cd {shlex.quote(str(ROOT))} && python -m econpipe.cli {MODE}"
-REPORT = f"cd {shlex.quote(str(ROOT))} && python -m econpipe.cli report"
+PIPELINE_PYTHON = shlex.quote(os.getenv("ECON_PYTHON_EXECUTABLE", "python"))
+RUN = f"cd {shlex.quote(str(ROOT))} && {PIPELINE_PYTHON} -m econpipe.cli {MODE}"
+REPORT = f"cd {shlex.quote(str(ROOT))} && {PIPELINE_PYTHON} -m econpipe.cli report"
 
 with DAG(
     dag_id="economic_indicators_etl",
