@@ -1,7 +1,22 @@
-"""Optional Airflow DAG. Requires Airflow installed separately (not CI-tested)."""
+"""Monthly World Bank ETL with an optional deterministic demo mode for integration tests.
+
+Operational requirements: install Apache Airflow, install this project, provide
+DATABASE_URL and set ECON_PIPELINE_MODE=run for real data. The CI smoke test
+uses ECON_PIPELINE_MODE=demo and artificial fixtures; it is not a production run.
+"""
 from datetime import datetime, timedelta
+import os
+from pathlib import Path
+import shlex
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+
+ROOT = Path(__file__).resolve().parents[1]
+MODE = os.getenv("ECON_PIPELINE_MODE", "run")
+if MODE not in {"run", "demo"}:
+    raise ValueError("ECON_PIPELINE_MODE must be run or demo")
+RUN = f"cd {shlex.quote(str(ROOT))} && python -m econpipe.cli {MODE}"
+REPORT = f"cd {shlex.quote(str(ROOT))} && python -m econpipe.cli report"
 
 with DAG(
     dag_id="economic_indicators_etl",
@@ -13,14 +28,12 @@ with DAG(
 ) as dag:
     load = BashOperator(
         task_id="fetch_validate_upsert",
-        bash_command="cd /opt/airflow/project && python -m econpipe.cli run",
-        env={"DATABASE_URL": "{{ var.value.get('ECON_DATABASE_URL', 'sqlite:////tmp/economic_warehouse.sqlite') }}"},
+        bash_command=RUN,
         append_env=True,
     )
     summarize = BashOperator(
         task_id="verify_sql_reporting",
-        bash_command="cd /opt/airflow/project && python -m econpipe.cli report",
-        env={"DATABASE_URL": "{{ var.value.get('ECON_DATABASE_URL', 'sqlite:////tmp/economic_warehouse.sqlite') }}"},
+        bash_command=REPORT,
         append_env=True,
     )
     load >> summarize

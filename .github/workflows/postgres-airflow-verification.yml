@@ -1,0 +1,107 @@
+name: PostgreSQL and Airflow integration verification
+on:
+  push:
+    paths:
+      - 'dags/economic_indicators_etl.py'
+      - '.github/workflows/postgres-airflow-verification.yml'
+      - 'econpipe/**'
+      - 'tests/fixtures/demo_api.json'
+  workflow_dispatch:
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: economic_data
+          POSTGRES_USER: econ_test
+          POSTGRES_PASSWORD: ci_ephemeral_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U econ_test -d economic_data"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg2://econ_test:ci_ephemeral_password@localhost:5432/economic_data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pipeline and PostgreSQL driver
+        run: python -m pip install -e '.[dev,postgres]'
+      - name: Test initial PostgreSQL load
+        run: |
+          python -m econpipe.cli demo
+          python - <<'PY'
+          import os
+          from sqlalchemy import text
+          from econpipe.store import connect
+          e=connect(os.environ['DATABASE_URL'])
+          with e.connect() as c:
+              count=c.execute(text('SELECT COUNT(*) FROM fact_country_indicator_year')).scalar_one()
+              orphan=c.execute(text('''SELECT COUNT(*) FROM fact_country_indicator_year f
+                  LEFT JOIN dim_country c ON f.country_code=c.country_code
+                  LEFT JOIN dim_indicator i ON f.indicator_code=i.indicator_code
+                  WHERE c.country_code IS NULL OR i.indicator_code IS NULL''')).scalar_one()
+              assert count==8 and orphan==0,(count,orphan)
+              print('POSTGRES VERIFIED:',count,'facts, orphan count',orphan)
+          e.dispose()
+          PY
+      - name: Verify idempotent replay and audit trail
+        run: |
+          python -m econpipe.cli demo
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from sqlalchemy import text
+          from econpipe.store import connect
+          report=json.loads(Path('results/last_run.json').read_text())
+          assert report['inserted']==report['updated']==0,report
+          assert report['unchanged']==8,report
+          e=connect(os.environ['DATABASE_URL'])
+          with e.connect() as c:
+              count=c.execute(text('SELECT COUNT(*) FROM fact_country_indicator_year')).scalar_one()
+              runs=c.execute(text('SELECT COUNT(*) FROM etl_run')).scalar_one()
+              assert count==8 and runs==2,(count,runs)
+              print('POSTGRES REPLAY VERIFIED:',count,'unchanged facts,',runs,'audited runs')
+          e.dispose()
+          PY
+
+  airflow-dag-execution:
+    runs-on: ubuntu-latest
+    env:
+      AIRFLOW_HOME: /tmp/airflow-macro-ci
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+      ECON_PIPELINE_MODE: demo
+      DATABASE_URL: sqlite:////tmp/macro_airflow_demo.sqlite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install constrained Apache Airflow and project
+        run: |
+          python -m pip install 'apache-airflow==2.10.5' --constraint 'https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.11.txt'
+          python -m pip install -e .
+      - name: Initialize metadata and parse DAG
+        run: |
+          airflow db migrate
+          airflow dags list-import-errors
+          airflow dags list | grep economic_indicators_etl
+      - name: Execute complete DAG (synthetic fixture, actual Airflow)
+        run: |
+          airflow dags test economic_indicators_etl 2026-10-01
+          python - <<'PY'
+          from sqlalchemy import text
+          from econpipe.store import connect
+          e=connect('sqlite:////tmp/macro_airflow_demo.sqlite')
+          with e.connect() as c:
+              count=c.execute(text('SELECT COUNT(*) FROM fact_country_indicator_year')).scalar_one()
+              assert count==8,count
+              print('AIRFLOW DAG EXECUTED:',count,'fixture facts in final warehouse')
+          e.dispose()
+          PY
